@@ -149,6 +149,13 @@ class DamaiBuyer:
         self.time_offset = 0.0
         self._playwright = None
         self._context = None
+        self._page_status = "unknown"  # 防止未预热时直接调用 execute_buy 崩溃
+
+        # 合并 config.json 中的选择器覆盖
+        config_selectors = config.get("selectors", {})
+        for key in self.SELECTORS:
+            if key in config_selectors:
+                self.SELECTORS[key] = config_selectors[key]
 
     # ── 浏览器 ──
     def launch_browser(self) -> BrowserContext:
@@ -446,7 +453,8 @@ class DamaiBuyer:
                 continue
 
         if not clicked:
-            logger.error(f"[{name}] 未找到购买按钮")
+            logger.warning(f"[{name}] 直接点击失败，尝试刷新页面...")
+            self._buy_refresh_strategy(page, event)
             return
 
         self._after_buy_click(page, event)
@@ -592,7 +600,7 @@ class DamaiBuyer:
                     continue
 
             if not clicked:
-                logger.warning(f"[{name}] 未找到票档 ¥{tier} 或该票档不可选")
+                logger.warning(f"[{name}] 未找到票档 ¥{tier} 或该票档不可选，尝试不选票档直接确认...")
 
         # 调整数量
         if quantity > 1:
@@ -663,7 +671,9 @@ class DamaiBuyer:
             try:
                 btn = page.locator(sel).first
                 if btn.count() > 0 and btn.is_visible():
-                    if auto_submit or self.dry_run:
+                    if self.dry_run:
+                        logger.info(f"[{name}] [DRY-RUN] 订单确认页，不实际提交")
+                    elif auto_submit:
                         btn.click()
                         logger.info(f"[{name}] 已点击提交订单")
                     logger.info("=" * 50)
@@ -741,6 +751,7 @@ class DamaiBuyer:
             self._human_delay(1.5, 3.0)
 
             status = self._detect_page_status(buy_page, event)
+            self._page_status = status  # 必须在 execute_buy 之前设置
             logger.info(f"[{name}] 状态: {status}")
 
             if status in ("on_sale", "countdown"):

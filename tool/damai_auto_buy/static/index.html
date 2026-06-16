@@ -288,6 +288,7 @@ label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--text-d
       <div class="form-group"><label>票档（如 580）</label><input type="text" id="evt-tier" placeholder="票档价格"></div>
       <div class="form-group"><label>数量</label><input type="number" id="evt-qty" value="1" min="1"></div>
     </div>
+    <div class="form-group"><label>价格上限（0=不限）</label><input type="number" id="evt-max-price" value="0" step="0.01" min="0"></div>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:12px;">
       启用 <label class="toggle"><input type="checkbox" id="evt-enabled" checked><span class="slider"></span></label>
     </label>
@@ -461,6 +462,7 @@ function showAddEvent() {
   $("#evt-edit-id").value = "";
   $("#evt-name").value = ""; $("#evt-url").value = "";
   $("#evt-tier").value = ""; $("#evt-qty").value = "1";
+  $("#evt-max-price").value = "0";
   $("#evt-enabled").checked = true;
   $("#event-modal").classList.add("show");
 }
@@ -471,7 +473,9 @@ function showEditEvent(id) {
     $("#event-modal-title").textContent = "编辑演出";
     $("#evt-edit-id").value = e.id; $("#evt-name").value = e.name;
     $("#evt-url").value = e.url; $("#evt-tier").value = e.tier||"";
-    $("#evt-qty").value = e.quantity||1; $("#evt-enabled").checked = e.enabled;
+    $("#evt-qty").value = e.quantity||1;
+    $("#evt-max-price").value = e.max_price||0;
+    $("#evt-enabled").checked = e.enabled;
     $("#event-modal").classList.add("show");
   });
 }
@@ -479,6 +483,7 @@ async function saveEvent() {
   const data = {
     name: $("#evt-name").value.trim(), url: $("#evt-url").value.trim(),
     tier: $("#evt-tier").value.trim(), quantity: parseInt($("#evt-qty").value)||1,
+    max_price: parseFloat($("#evt-max-price").value)||0,
     enabled: $("#evt-enabled").checked,
   };
   if (!data.name || !data.url) { toast("名称和 URL 为必填", "error"); return; }

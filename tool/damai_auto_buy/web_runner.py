@@ -237,6 +237,7 @@ class DamaiRunner:
                 "enabled": data.get("enabled", True),
                 "tier": data.get("tier", ""),
                 "quantity": data.get("quantity", 1),
+                "max_price": data.get("max_price", 0),
             }
             events.append(event)
             config["events"] = events
@@ -248,7 +249,7 @@ class DamaiRunner:
             config = self.load_config()
             for e in config.get("events", []):
                 if e.get("id") == event_id:
-                    for key in ("name", "url", "enabled", "tier", "quantity"):
+                    for key in ("name", "url", "enabled", "tier", "quantity", "max_price"):
                         if key in data and data[key] is not None:
                             e[key] = data[key]
                     self._save_unsafe(config)

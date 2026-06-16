@@ -36,6 +36,7 @@ class EventCreate(BaseModel):
     enabled: bool = True
     tier: str = ""
     quantity: int = Field(default=1, ge=1)
+    max_price: float = 0.0
 
 class EventUpdate(BaseModel):
     name: str = None
@@ -43,6 +44,7 @@ class EventUpdate(BaseModel):
     enabled: bool = None
     tier: str = None
     quantity: int = None
+    max_price: float = None
 
 class BuyStartRequest(BaseModel):
     time: str = Field(..., min_length=4)
