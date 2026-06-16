@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JD Auto-Buy</title>
+<style>
+/* ═══════════════════════════════════════════════════════ */
+/* 主题变量 */
+/* ═══════════════════════════════════════════════════════ */
+:root {
+  --bg: #0f0f1a;
+  --bg-sidebar: #16162a;
+  --bg-card: #1a1a35;
+  --bg-input: #12122a;
+  --text: #d0d0e0;
+  --text-dim: #707088;
+  --accent: #c91623;
+  --accent-hover: #e01a2b;
+  --success: #2ecc71;
+  --warning: #f39c12;
+  --danger: #e74c3c;
+  --border: #252545;
+  --sidebar-w: 200px;
+  --radius: 6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5;
+  overflow: hidden; height: 100vh;
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* 布局 */
+/* ═══════════════════════════════════════════════════════ */
+#app { display: flex; height: 100vh; }
+#sidebar {
+  width: var(--sidebar-w); background: var(--bg-sidebar);
+  display: flex; flex-direction: column; flex-shrink: 0; border-right: 1px solid var(--border);
+}
+#sidebar .logo {
+  padding: 20px 16px; font-size: 18px; font-weight: 700; color: var(--accent);
+  border-bottom: 1px solid var(--border);
+}
+#sidebar nav { flex: 1; padding: 8px 0; }
+#sidebar nav a {
+  display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: var(--text-dim);
+  text-decoration: none; transition: all 0.15s; border-left: 3px solid transparent;
+  font-size: 14px;
+}
+#sidebar nav a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+#sidebar nav a.active {
+  color: var(--text); background: rgba(201,22,35,0.1);
+  border-left-color: var(--accent);
+}
+#sidebar .icon { font-size: 16px; width: 20px; text-align: center; }
+#main {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+#content { flex: 1; padding: 24px; overflow-y: auto; }
+#statusbar {
+  height: 36px; background: var(--bg-sidebar); border-top: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px; font-size: 12px; color: var(--text-dim);
+  gap: 24px; flex-shrink: 0;
+}
+#statusbar .dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px;
+}
+#statusbar .dot.idle { background: #888; }
+#statusbar .dot.monitoring { background: var(--success); animation: pulse 2s infinite; }
+#statusbar .dot.restock_running { background: var(--warning); animation: pulse 1s infinite; }
+#statusbar .dot.checking { background: var(--warning); }
+#statusbar .dot.error { background: var(--danger); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ═══════════════════════════════════════════════════════ */
+/* 通用组件 */
+/* ═══════════════════════════════════════════════════════ */
+.card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+}
+.card-header { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.col { flex: 1; min-width: 200px; }
+
+/* 表格 */
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+th { color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+tr:hover { background: rgba(255,255,255,0.02); }
+td.url { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 表单 */
+input, select, textarea {
+  background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 12px; font-size: 13px; outline: none;
+  transition: border-color 0.15s; font-family: inherit;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input[type="text"], input[type="url"], input[type="number"], input[type="time"] { width: 100%; }
+select { width: 100%; cursor: pointer; }
+
+label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--text-dim); font-weight: 500; }
+.form-group { margin-bottom: 12px; }
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; }
+
+/* 按钮 */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+  border: none; border-radius: var(--radius); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { background: rgba(255,255,255,0.05); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 切换开关 */
+.toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider {
+  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 22px;
+  transition: 0.2s;
+}
+.toggle .slider:before {
+  content: ""; position: absolute; height: 16px; width: 16px; left: 2px; bottom: 2px;
+  background: var(--text-dim); border-radius: 50%; transition: 0.2s;
+}
+.toggle input:checked + .slider { background: var(--accent); border-color: var(--accent); }
+.toggle input:checked + .slider:before { background: #fff; transform: translateX(18px); }
+
+/* 状态标签 */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+}
+.badge-success { background: rgba(46,204,113,0.15); color: var(--success); }
+.badge-warning { background: rgba(243,156,18,0.15); color: var(--warning); }
+.badge-danger { background: rgba(231,76,60,0.15); color: var(--danger); }
+.badge-idle { background: rgba(136,136,136,0.15); color: #888; }
+
+/* 状态卡片网格 */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; text-align: center;
+}
+.stat-card .value { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+.stat-card .label { font-size: 12px; color: var(--text-dim); }
+.stat-card .value.idle { color: #888; }
+.stat-card .value.monitoring { color: var(--success); }
+.stat-card .value.restock_running { color: var(--warning); }
+.stat-card .value.error { color: var(--danger); }
+
+/* 日志查看器 */
+#log-viewer {
+  background: #08081a; border: 1px solid var(--border); border-radius: var(--radius);
+  height: calc(100vh - 280px); min-height: 300px; overflow-y: auto; padding: 12px;
+  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace; font-size: 12px;
+  line-height: 1.6;
+}
+.log-line { white-space: pre-wrap; word-break: break-all; }
+.log-INFO { color: #8be9fd; }
+.log-WARNING { color: #f1fa8c; }
+.log-ERROR { color: #ff5555; }
+.log-CRITICAL { color: #ff5555; font-weight: bold; background: rgba(255,85,85,0.1); }
+.log-timestamp { color: var(--text-dim); margin-right: 8px; }
+.log-logger { color: #bd93f9; margin-right: 8px; }
+
+/* Toast */
+.toast {
+  position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 12px 20px;
+  border-radius: var(--radius); font-size: 13px; animation: slideIn 0.3s ease;
+  max-width: 360px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.toast-success { background: var(--success); color: #fff; }
+.toast-error { background: var(--danger); color: #fff; }
+.toast-info { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* 对话框 */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex;
+  align-items: center; justify-content: center; z-index: 999;
+  display: none;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 24px; max-width: 500px; width: 90%;
+}
+.modal h3 { margin-bottom: 16px; }
+.modal .btn-group { justify-content: flex-end; margin-top: 16px; }
+
+/* 进度条 */
+.slider-group { display: flex; align-items: center; gap: 12px; }
+.slider-group input[type="range"] { flex: 1; }
+.slider-group .val { min-width: 50px; text-align: right; font-weight: 600; }
+
+/* 可折叠 */
+.collapsible { cursor: pointer; user-select: none; }
+.collapsible:after { content: " ▸"; font-size: 11px; }
+.collapsible.open:after { content: " ▾"; }
+.collapse-content { display: none; margin-top: 12px; }
+.collapse-content.open { display: block; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- 侧边栏 -->
+  <div id="sidebar">
+    <div class="logo">JD Auto-Buy</div>
+    <nav>
+      <a href="#dashboard" class="active" data-tab="dashboard"><span class="icon">📊</span>仪表盘</a>
+      <a href="#products" data-tab="products"><span class="icon">📦</span>产品管理</a>
+      <a href="#restock" data-tab="restock"><span class="icon">⏱</span>定时抢购</a>
+      <a href="#settings" data-tab="settings"><span class="icon">⚙</span>设置</a>
+      <a href="#logs" data-tab="logs"><span class="icon">📋</span>日志</a>
+    </nav>
+  </div>
+
+  <!-- 主内容 -->
+  <div id="main">
+    <div id="content">
+
+      <!-- 仪表盘 -->
+      <div id="panel-dashboard" class="tab-panel active">
+        <div class="stat-grid" id="stat-grid"></div>
+        <div class="card">
+          <div class="card-header">快速操作</div>
+          <div class="btn-group">
+            <button class="btn btn-success" id="btn-start-monitor" onclick="startMonitor()">▶ 启动监控</button>
+            <button class="btn btn-danger" id="btn-stop" onclick="stopTask()" disabled>⏹ 停止</button>
+            <button class="btn btn-outline" id="btn-check-now" onclick="checkNow()" disabled>⟳ 立即检查</button>
+            <button class="btn btn-outline" id="btn-check-once" onclick="checkOnce()">🔍 单次检查</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">最近日志</div>
+          <div id="dashboard-logs" style="background:#08081a;border-radius:4px;padding:12px;max-height:200px;overflow-y:auto;font-family:monospace;font-size:12px;line-height:1.6;"></div>
+        </div>
+      </div>
+
+      <!-- 产品管理 -->
+      <div id="panel-products" class="tab-panel">
+        <div class="card">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>产品列表</span>
+            <button class="btn btn-primary btn-sm" onclick="showAddProduct()">+ 添加产品</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>ID</th><th>名称</th><th>URL</th><th>规格</th><th>价格上限</th><th>数量</th><th>启用</th><th>操作</th></tr></thead>
+              <tbody id="product-table-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:40px;">暂无产品，点击「添加产品」开始</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 定时抢购 -->
+      <div id="panel-restock" class="tab-panel">
+        <div class="card">
+          <div class="card-header">定时抢购配置</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>目标时间</label>
+              <input type="time" step="1" id="restock-time" value="08:00:00">
+            </div>
+            <div class="form-group">
+              <label>产品</label>
+              <select id="restock-product"></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>预热提前（秒）: <span id="advance-val">30</span></label>
+              <div class="slider-group">
+                <input type="range" min="15" max="120" value="30" id="restock-advance" oninput="$('#advance-val').textContent=this.value">
+              </div>
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <span>试运行模式</span>
+                <label class="toggle"><input type="checkbox" id="restock-dry-run"><span class="slider"></span></label>
+              </label>
+            </div>
+          </div>
+          <div class="btn-group" style="margin-top:12px;">
+            <button class="btn btn-primary" id="btn-start-restock" onclick="startRestock()">▶ 启动抢购</button>
+            <button class="btn btn-danger" id="btn-stop-restock" onclick="stopTask()" disabled>⏹ 取消</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">抢购状态</div>
+          <div id="restock-status" style="font-family:monospace;font-size:12px;color:var(--text-dim);">
+            等待启动...
+          </div>
+        </div>
+      </div>
+
+      <!-- 设置 -->
+      <div id="panel-settings" class="tab-panel">
+        <div class="card">
+          <div class="card-header">调度设置</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>检查间隔（分钟）</label>
+              <input type="number" id="set-interval" min="5" max="120" value="10">
+            </div>
+            <div class="form-group">
+              <label>活跃时段 - 开始</label>
+              <input type="time" id="set-hour-start" value="08:00">
+            </div>
+            <div class="form-group">
+              <label>活跃时段 - 结束</label>
+              <input type="time" id="set-hour-end" value="23:00">
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">结算设置</div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <span>自动提交订单</span>
+              <label class="toggle"><input type="checkbox" id="set-auto-submit"><span class="slider"></span></label>
+            </label>
+            <small style="color:var(--text-dim);">开启后脚本会自动点击「提交订单」，但支付仍需手动完成</small>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header collapsible" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">高级 - CSS 选择器</div>
+          <div class="collapse-content">
+            <div class="form-row">
+              <div class="form-group">
+                <label>加入购物车按钮</label>
+                <input type="text" id="sel-add-cart" placeholder="#InitCartUrl">
+              </div>
+              <div class="form-group">
+                <label>库存不可用</label>
+                <input type="text" id="sel-oos" placeholder=".btn-notify, .btn-disable">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>购物车复选框</label>
+                <input type="text" id="sel-checkbox" placeholder=".item-checkbox">
+              </div>
+              <div class="form-group">
+                <label>结算按钮</label>
+                <input type="text" id="sel-checkout" placeholder=".common-submit-btn">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>提交订单按钮</label>
+                <input type="text" id="sel-submit" placeholder="#submitOrder">
+              </div>
+              <div class="form-group">
+                <label>价格</label>
+                <input type="text" id="sel-price" placeholder=".p-price .price">
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()">💾 保存设置</button>
+      </div>
+
+      <!-- 日志 -->
+      <div id="panel-logs" class="tab-panel">
+        <div class="btn-group" style="margin-bottom:12px;">
+          <select id="log-level-filter" onchange="filterLogs()" style="width:auto;">
+            <option value="">全部级别</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+            <input type="checkbox" id="log-autoscroll" checked> 自动滚动
+          </label>
+          <button class="btn btn-outline btn-sm" onclick="clearLogs()">清空</button>
+        </div>
+        <div id="log-viewer"></div>
+      </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div id="statusbar">
+      <span><span class="dot idle" id="status-dot"></span>状态: <strong id="status-text">idle</strong></span>
+      <span id="status-last-check">上次检查: --</span>
+      <span id="status-product-count">产品数: 0</span>
+      <span id="status-uptime" style="margin-left:auto;">运行时间: 00:00:00</span>
+      <span id="sse-indicator" style="color:var(--text-dim);">SSE ⬤</span>
+    </div>
+  </div>
+</div>
+
+<!-- 添加/编辑产品对话框 -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal">
+    <h3 id="product-modal-title">添加产品</h3>
+    <div class="form-group"><label>名称 *</label><input type="text" id="prod-name" placeholder="商品名称"></div>
+    <div class="form-group"><label>URL *</label><input type="url" id="prod-url" placeholder="https://item.jd.com/..."></div>
+    <div class="form-row">
+      <div class="form-group"><label>尺码</label><input type="text" id="prod-size" placeholder="如 L, XL"></div>
+      <div class="form-group"><label>颜色</label><input type="text" id="prod-color" placeholder="如 黑色"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>价格上限（0=不限）</label><input type="number" id="prod-max-price" value="0" step="0.01" min="0"></div>
+      <div class="form-group"><label>数量</label><input type="number" id="prod-qty" value="1" min="1"></div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        启用 <label class="toggle"><input type="checkbox" id="prod-enabled" checked><span class="slider"></span></label>
+      </label>
+    </div>
+    <input type="hidden" id="prod-edit-id" value="">
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="closeProductModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveProduct()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════ */
+/* 工具函数 */
+/* ═══════════════════════════════════════════════════════ */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+const API = (path, opts = {}) => fetch(path, opts).then(r => r.json());
+
+let state = { status: {}, logs: [], sse: null };
+let logLines = [];
+let logFilter = "";
+
+function toast(msg, type = "info") {
+  const t = document.createElement("div");
+  t.className = `toast toast-${type}`; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.remove(); }, 3000);
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* 导航 */
+/* ═══════════════════════════════════════════════════════ */
+$$("#sidebar nav a").forEach(a => {
+  a.addEventListener("click", (e) => {
+    e.preventDefault();
+    $$("#sidebar nav a").forEach(x => x.classList.remove("active"));
+    a.classList.add("active");
+    $$(".tab-panel").forEach(p => p.classList.remove("active"));
+    $(`#panel-${a.dataset.tab}`).classList.add("active");
+    if (a.dataset.tab === "logs") renderLogs();
+    if (a.dataset.tab === "products") loadProducts();
+    if (a.dataset.tab === "settings") loadSettings();
+    if (a.dataset.tab === "restock") loadRestockProducts();
+  });
+});
+
+/* ═══════════════════════════════════════════════════════ */
+/* SSE */
+/* ═══════════════════════════════════════════════════════ */
+function connectSSE() {
+  if (state.sse) state.sse.close();
+  state.sse = new EventSource("/api/logs/stream");
+  state.sse.addEventListener("log", (e) => {
+    const data = JSON.parse(e.data);
+    logLines.push(data);
+    if (logLines.length > 5000) logLines.shift();
+    appendLogLine(data);
+    updateDashboardMiniLog(data);
+  });
+  state.sse.addEventListener("status", (e) => {
+    const data = JSON.parse(e.data);
+    updateStatusUI(data);
+  });
+  state.sse.addEventListener("ping", () => {});
+  state.sse.onerror = () => {
+    $("#sse-indicator").style.color = "var(--danger)";
+    setTimeout(connectSSE, 3000);
+  };
+  state.sse.onopen = () => {
+    $("#sse-indicator").style.color = "var(--success)";
+  };
+}
+
+function appendLogLine(data) {
+  if (logFilter && data.level !== logFilter) return;
+  const viewer = $("#log-viewer");
+  if (!viewer) return;
+  const div = document.createElement("div");
+  div.className = `log-line log-${data.level}`;
+  div.innerHTML = `<span class="log-timestamp">${data.timestamp}</span><span class="log-logger">[${data.logger}]</span>${escHtml(data.message)}`;
+  viewer.appendChild(div);
+  if ($("#log-autoscroll")?.checked) viewer.scrollTop = viewer.scrollHeight;
+}
+
+function updateDashboardMiniLog(data) {
+  const el = $("#dashboard-logs");
+  if (!el) return;
+  const div = document.createElement("div");
+  div.className = `log-line log-${data.level}`;
+  div.innerHTML = `<span class="log-timestamp">${data.timestamp}</span>${escHtml(data.message)}`;
+  el.appendChild(div);
+  if (el.children.length > 20) el.firstChild.remove();
+  el.scrollTop = el.scrollHeight;
+}
+
+function escHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+/* ═══════════════════════════════════════════════════════ */
+/* 状态更新 */
+/* ═══════════════════════════════════════════════════════ */
+async function refreshStatus() {
+  const res = await API("/api/status");
+  if (res.success) updateStatusUI(res.data);
+}
+
+function updateStatusUI(s) {
+  state.status = s;
+  // 状态点
+  const dot = $("#status-dot");
+  dot.className = "dot " + s.status;
+  $("#status-text").textContent = s.status;
+  // 状态栏
+  $("#status-last-check").textContent = s.last_check_time ? `上次检查: ${s.last_check_time}` : "上次检查: --";
+  $("#status-product-count").textContent = `产品数: ${s.product_count}`;
+  const uptime = s.uptime_seconds ? new Date(s.uptime_seconds * 1000).toISOString().substr(11, 8) : "00:00:00";
+  $("#status-uptime").textContent = `运行: ${uptime}`;
+  // 按钮
+  const running = s.monitoring || s.restock_running || s.status === "checking";
+  $("#btn-start-monitor").disabled = running;
+  $("#btn-check-once").disabled = running;
+  $("#btn-stop").disabled = !running;
+  $("#btn-check-now").disabled = !s.monitoring;
+  $("#btn-start-restock").disabled = running;
+  $("#btn-stop-restock").disabled = !s.restock_running;
+  // 统计卡片
+  renderStats(s);
+}
+
+function renderStats(s) {
+  const cl = s.status === "monitoring" ? "monitoring" : s.status === "restock_running" ? "restock_running" : s.status === "error" ? "error" : "idle";
+  const stLabel = {idle:"空闲", monitoring:"监控中", restock_running:"抢购中", checking:"检查中", error:"异常"}[s.status] || s.status;
+  $("#stat-grid").innerHTML = `
+    <div class="stat-card"><div class="value ${cl}">${stLabel}</div><div class="label">当前状态</div></div>
+    <div class="stat-card"><div class="value">${s.product_count}</div><div class="label">启用产品数</div></div>
+    <div class="stat-card"><div class="value">${s.last_check_time || "--"}</div><div class="label">上次检查</div></div>
+    <div class="stat-card"><div class="value">${s.error_message || "无"}</div><div class="label">最近错误</div></div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* 监控控制 */
+/* ═══════════════════════════════════════════════════════ */
+async function startMonitor() {
+  const dry = $("#restock-dry-run")?.checked || false;
+  const res = await API("/api/monitor/start", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:dry})});
+  if (res.success) { toast(res.message, "success"); refreshStatus(); }
+  else toast(res.message, "error");
+}
+async function stopTask() {
+  const res = await API("/api/monitor/stop", {method:"POST"});
+  if (res.success) { toast(res.message, "success"); refreshStatus(); }
+  else toast(res.message, "error");
+}
+async function checkNow() {
+  const res = await API("/api/monitor/check-now", {method:"POST"});
+  if (res.success) toast(res.message, "success");
+  else toast(res.message, "error");
+}
+async function checkOnce() {
+  const dry = $("#restock-dry-run")?.checked || false;
+  const res = await API("/api/monitor/check-once", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:dry})});
+  if (res.success) { toast(res.message, "success"); refreshStatus(); }
+  else toast(res.message, "error");
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* 产品管理 */
+/* ═══════════════════════════════════════════════════════ */
+async function loadProducts() {
+  const res = await API("/api/products");
+  if (!res.success) return;
+  const products = res.data.products;
+  const tbody = $("#product-table-body");
+  if (!products.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:40px;">暂无产品</td></tr>';
+    return;
+  }
+  tbody.innerHTML = products.map(p => `
+    <tr>
+      <td>${p.id}</td>
+      <td>${escHtml(p.name)}</td>
+      <td class="url" title="${escHtml(p.url)}">${escHtml(p.url)}</td>
+      <td>${escHtml(p.size||"-")} / ${escHtml(p.color||"-")}</td>
+      <td>${p.max_price ? "¥"+p.max_price : "-"}</td>
+      <td>${p.quantity}</td>
+      <td><label class="toggle"><input type="checkbox" ${p.enabled?"checked":""} onchange="toggleProduct(${p.id},this.checked)"><span class="slider"></span></label></td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="showEditProduct(${p.id})">编辑</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id})">删除</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+async function toggleProduct(id, enabled) {
+  await API(`/api/products/${id}`, {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled})});
+  refreshStatus();
+}
+
+function showAddProduct() {
+  $("#product-modal-title").textContent = "添加产品";
+  $("#prod-edit-id").value = "";
+  $("#prod-name").value = "";
+  $("#prod-url").value = "";
+  $("#prod-size").value = "";
+  $("#prod-color").value = "";
+  $("#prod-max-price").value = "0";
+  $("#prod-qty").value = "1";
+  $("#prod-enabled").checked = true;
+  $("#product-modal").classList.add("show");
+}
+
+async function showEditProduct(id) {
+  const res = await API("/api/products");
+  const p = res.data.products.find(x => x.id === id);
+  if (!p) return;
+  $("#product-modal-title").textContent = "编辑产品";
+  $("#prod-edit-id").value = p.id;
+  $("#prod-name").value = p.name;
+  $("#prod-url").value = p.url;
+  $("#prod-size").value = p.size || "";
+  $("#prod-color").value = p.color || "";
+  $("#prod-max-price").value = p.max_price || 0;
+  $("#prod-qty").value = p.quantity || 1;
+  $("#prod-enabled").checked = p.enabled;
+  $("#product-modal").classList.add("show");
+}
+
+async function saveProduct() {
+  const data = {
+    name: $("#prod-name").value.trim(),
+    url: $("#prod-url").value.trim(),
+    size: $("#prod-size").value.trim(),
+    color: $("#prod-color").value.trim(),
+    max_price: parseFloat($("#prod-max-price").value) || 0,
+    quantity: parseInt($("#prod-qty").value) || 1,
+    enabled: $("#prod-enabled").checked,
+  };
+  if (!data.name || !data.url) { toast("名称和 URL 为必填项", "error"); return; }
+  const id = $("#prod-edit-id").value;
+  let res;
+  if (id) {
+    res = await API(`/api/products/${id}`, {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  } else {
+    res = await API("/api/products", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  }
+  if (res.success) { toast(res.message, "success"); closeProductModal(); loadProducts(); refreshStatus(); }
+  else toast(res.message, "error");
+}
+
+async function deleteProduct(id) {
+  if (!confirm("确定要删除该产品吗？")) return;
+  const res = await API(`/api/products/${id}`, {method:"DELETE"});
+  if (res.success) { toast(res.message, "success"); loadProducts(); refreshStatus(); }
+  else toast(res.message, "error");
+}
+
+function closeProductModal() { $("#product-modal").classList.remove("show"); }
+
+/* ═══════════════════════════════════════════════════════ */
+/* 抢购 */
+/* ═══════════════════════════════════════════════════════ */
+async function loadRestockProducts() {
+  const res = await API("/api/products");
+  const sel = $("#restock-product");
+  sel.innerHTML = '<option value="">使用第一个启用的产品</option>' +
+    res.data.products.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join("");
+}
+
+async function startRestock() {
+  const time = $("#restock-time").value;
+  const advance = parseInt($("#restock-advance").value);
+  const dry = $("#restock-dry-run").checked;
+  const pid = $("#restock-product").value || null;
+  if (!time) { toast("请设置目标时间", "error"); return; }
+  const res = await API("/api/restock/start", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({time,advance,dry_run:dry,product_id:pid?parseInt(pid):null})});
+  if (res.success) { toast(res.message, "success"); refreshStatus(); }
+  else toast(res.message, "error");
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* 设置 */
+/* ═══════════════════════════════════════════════════════ */
+async function loadSettings() {
+  const res = await API("/api/settings");
+  if (!res.success) return;
+  const s = res.data;
+  $("#set-interval").value = s.schedule?.check_interval_minutes || 10;
+  const ah = s.schedule?.active_hours || [8, 23];
+  $("#set-hour-start").value = `${String(ah[0]).padStart(2,"0")}:00`;
+  $("#set-hour-end").value = `${String(ah[1]).padStart(2,"0")}:00`;
+  $("#set-auto-submit").checked = s.checkout?.auto_submit_order || false;
+  // 选择器不在此处加载，保存时从 config API 获取后合并
+}
+
+async function saveSettings() {
+  // 先获取完整配置
+  const cfgRes = await API("/api/config");
+  if (!cfgRes.success) { toast("获取配置失败", "error"); return; }
+  const config = cfgRes.data;
+
+  config.schedule = {
+    ...config.schedule,
+    check_interval_minutes: parseInt($("#set-interval").value) || 10,
+    active_hours: [
+      parseInt($("#set-hour-start").value.split(":")[0]),
+      parseInt($("#set-hour-end").value.split(":")[0]),
+    ],
+  };
+  config.checkout = {
+    ...config.checkout,
+    auto_submit_order: $("#set-auto-submit").checked,
+  };
+  // 选择器
+  const selUpdates = {};
+  const ac = $("#sel-add-cart").value.trim();
+  const oos = $("#sel-oos").value.trim();
+  const cb = $("#sel-checkbox").value.trim();
+  const co = $("#sel-checkout").value.trim();
+  const sb = $("#sel-submit").value.trim();
+  const pr = $("#sel-price").value.trim();
+  if (ac) selUpdates.add_to_cart_btn = ac;
+  if (oos) selUpdates.stock_unavailable = oos;
+  if (cb) selUpdates.cart_checkbox = cb;
+  if (co) selUpdates.cart_checkout_btn = co;
+  if (sb) selUpdates.order_submit_btn = sb;
+  if (pr) selUpdates.price_current = pr;
+  if (Object.keys(selUpdates).length) {
+    config.selectors = { ...config.selectors, ...selUpdates };
+  }
+
+  const res = await API("/api/config", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(config)});
+  if (res.success) toast("设置已保存", "success");
+  else toast(res.message, "error");
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* 日志 */
+/* ═══════════════════════════════════════════════════════ */
+function renderLogs() {
+  const viewer = $("#log-viewer");
+  viewer.innerHTML = "";
+  logLines.forEach(data => appendLogLine(data));
+  viewer.scrollTop = viewer.scrollHeight;
+}
+function filterLogs() {
+  logFilter = $("#log-level-filter").value;
+  $("#log-viewer").innerHTML = "";
+  logLines.forEach(data => appendLogLine(data));
+}
+function clearLogs() {
+  logLines = [];
+  $("#log-viewer").innerHTML = "";
+  $("#dashboard-logs").innerHTML = "";
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* 初始化 */
+/* ═══════════════════════════════════════════════════════ */
+document.addEventListener("DOMContentLoaded", async () => {
+  connectSSE();
+  await refreshStatus();
+  renderStats(state.status);
+  // 每 5 秒刷新状态
+  setInterval(refreshStatus, 5000);
+});
+</script>
+</body>
+</html>
