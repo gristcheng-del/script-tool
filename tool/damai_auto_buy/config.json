@@ -1,0 +1,36 @@
+{
+    "_comment": "=== 大麦网自动抢票配置 ===",
+
+    "browser": {
+        "headless": false,
+        "user_data_dir": "./browser_data"
+    },
+
+    "events": [
+        {
+            "name": "示例-某某演唱会",
+            "url": "https://detail.damai.cn/item.htm?id=123456789",
+            "enabled": false,
+            "tier": "580",
+            "quantity": 2,
+            "max_price": 0
+        }
+    ],
+
+    "checkout": {
+        "auto_submit_order": false
+    },
+
+    "schedule": {
+        "check_interval_minutes": 5,
+        "active_hours": [8, 23]
+    },
+
+    "selectors": {
+        "_comment": "大麦页面选择器。如果页面更新导致识别失败，请修改此处。",
+        "buy_btn": "a:has-text('立即购买'), .buy-btn:not(.disabled)",
+        "sku_item": ".sku-item, .ticket-item",
+        "sku_confirm": "a:has-text('确定'), .btn-ok",
+        "order_submit": "#submitOrder, .submit-btn"
+    }
+}
