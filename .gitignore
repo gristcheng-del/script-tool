@@ -1,0 +1,18 @@
+# 浏览器用户数据（含登录态、cookie等敏感信息）
+browser_data/
+
+# 运行日志
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

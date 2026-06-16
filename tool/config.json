@@ -1,0 +1,45 @@
+{
+    "_comment": "=== 京东自动补货配置 === 两个脚本共用此配置文件",
+
+    "browser": {
+        "headless": false,
+        "slow_mo": 300,
+        "user_data_dir": "./browser_data"
+    },
+
+    "schedule": {
+        "check_interval_minutes": 10,
+        "active_hours": [8, 23]
+    },
+
+    "products": [
+        {
+            "name": "示例-短袖T恤",
+            "url": "https://item.jd.com/100012345678.html",
+            "enabled": false,
+            "size": "L",
+            "color": "黑色",
+            "max_price": 99.0,
+            "quantity": 2
+        }
+    ],
+
+    "checkout": {
+        "auto_submit_order": false,
+        "payment_password_required": true
+    },
+
+    "selectors": {
+        "stock_available": ".btn-addtocart",
+        "stock_unavailable": ".btn-notify, .btn-disable",
+        "add_to_cart_btn": "#InitCartUrl",
+        "sku_size": "[data-sku]",
+        "sku_color": "[data-sku]",
+        "price_current": ".p-price .price",
+        "go_to_cart": ".btn-lg.btn-addtocart",
+        "cart_checkbox": ".item-checkbox",
+        "cart_checkout_btn": ".common-submit-btn",
+        "order_submit_btn": "#submitOrder",
+        "order_confirm": ".checkout-submit button"
+    }
+}
