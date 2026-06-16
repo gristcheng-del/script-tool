@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import random
+import re
 import signal
 import sys
 import time
@@ -39,6 +40,7 @@ from stealth_utils import (
     human_delay,
     human_scroll,
     IntervalRandomizer,
+    order_page_ritual,
 )
 
 # ---------------------------------------------------------------------------
@@ -375,8 +377,6 @@ class JDAutoBuy:
                 el = page.locator(sel).first
                 if el.count() > 0:
                     text = el.inner_text(timeout=2000).strip()
-                    # 提取数字
-                    import re
                     nums = re.findall(r"[\d.]+", text)
                     if nums:
                         return float(nums[0])
@@ -565,7 +565,9 @@ class JDAutoBuy:
         try:
             # 等待订单确认页加载
             page.wait_for_load_state("domcontentloaded")
-            self._human_delay(2, 3)
+
+            # 模拟真人确认行为：看看地址、翻翻价格
+            order_page_ritual(page)
 
             submit_selectors = [
                 self.selectors.get("order_submit_btn", ""),

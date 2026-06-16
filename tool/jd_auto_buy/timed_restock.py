@@ -392,8 +392,6 @@ class TimedRestock:
 
             time.sleep(0.1)  # 最后阶段密集检查
 
-        return True
-
     # ---- 执行抢购 ----
     def execute_buy(self, page: Page, product: dict):
         """在目标时间点执行抢购操作"""
@@ -468,6 +466,7 @@ class TimedRestock:
         if not clicked:
             logger.warning(f"[{name}] 10秒内未检测到可购买按钮，尝试刷新页面...")
             self._buy_refresh_strategy(page, product)
+            # _buy_refresh_strategy 内部已调用 _after_buy_click，不要重复调用
             return
 
         self._after_buy_click(page, product)
@@ -525,7 +524,8 @@ class TimedRestock:
             time.sleep(0.05)
 
         if not clicked:
-            logger.error(f"[{name}] 刷新后仍未能找到购买按钮（可能已秒光）")
+            logger.error(f"[{name}] 刷新后仍未能找到购买按钮（可能已秒光），放弃本次抢购")
+            return
 
         self._after_buy_click(page, product)
 

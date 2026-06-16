@@ -31,33 +31,38 @@ def get_browser_channel() -> Tuple[str, Optional[str]]:
 
     返回: (channel_name, fallback_description)
     """
-    if sys.platform != "win32":
-        return "chrome", None
+    if sys.platform == "win32":
+        try:
+            import winreg
 
-    try:
-        import winreg
+            # 优先 Chrome
+            for name, reg_path in [
+                ("chrome", r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"),
+                ("msedge", r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"),
+            ]:
+                try:
+                    key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path)
+                    path = winreg.QueryValue(key, None)
+                    winreg.CloseKey(key)
+                    if path and Path(path).exists():
+                        return name, Path(path).name
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
-        # 优先 Chrome
-        for name, reg_path in [
-            ("chrome", r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"),
-            ("msedge", r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"),
-        ]:
-            try:
-                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path)
-                path = winreg.QueryValue(key, None)
-                winreg.CloseKey(key)
-                if path and Path(path).exists():
-                    return name, Path(path).name
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    # 直接检查常见路径
+    # 直接检查常见路径（Windows）
     chrome_paths = [
         Path.home() / "AppData/Local/Google/Chrome/Application/chrome.exe",
         Path("C:/Program Files/Google/Chrome/Application/chrome.exe"),
         Path("C:/Program Files (x86)/Google/Chrome/Application/chrome.exe"),
+    ] if sys.platform == "win32" else [
+        # macOS / Linux
+        Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        Path.home() / ".config/google-chrome/chrome",
+        Path("/usr/bin/google-chrome"),
+        Path("/usr/bin/chromium-browser"),
+        Path("/snap/bin/chromium"),
     ]
     for p in chrome_paths:
         if p.exists():
@@ -96,36 +101,48 @@ def get_common_viewport() -> dict:
 
 
 PAGE_INIT_SCRIPT = """
-// 只处理最基础的 webdriver 标记。
-// 更深的指纹（如 CDP runtime、chrome 对象差异）无法通过 JS 修改。
-Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+// 只处理最基础的自动化标记。
+// 更深的指纹（CDP runtime、chrome 对象差异）无法通过 JS 修改。
+(function() {
+    try {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    } catch(e) {}
 
-// 伪造 plugins 数组长度（Playwright 默认可能为空）
-if (!navigator.plugins || navigator.plugins.length === 0) {
-    Object.defineProperty(navigator, 'plugins', {
-        get: () => {
-            const plugins = [
+    // 填充 plugins（Playwright 默认可能为空数组）
+    try {
+        if (!navigator.plugins || navigator.plugins.length === 0) {
+            const fakePlugins = [
                 { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
                 { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
                 { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
             ];
-            plugins.item = (i) => plugins[i] || null;
-            plugins.namedItem = (name) => plugins.find(p => p.name === name) || null;
-            plugins.refresh = () => {};
-            Object.setPrototypeOf(plugins, PluginArray.prototype);
-            return plugins;
-        },
-        enumerable: true,
-        configurable: true,
-    });
-}
+            fakePlugins.item = function(i) { return this[i] || null; };
+            fakePlugins.namedItem = function(name) { return this.find(function(p) { return p.name === name; }) || null; };
+            fakePlugins.refresh = function() {};
+            try {
+                Object.setPrototypeOf(fakePlugins, PluginArray.prototype);
+            } catch(e) {
+                // PluginArray.prototype 可能不可用，跳过原型设置
+            }
+            Object.defineProperty(navigator, 'plugins', {
+                get: function() { return fakePlugins; },
+                enumerable: true,
+                configurable: true,
+            });
+        }
+    } catch(e) {}
 
-// 伪造 languages（空数组是明显特征）
-if (!navigator.languages || navigator.languages.length === 0) {
-    Object.defineProperty(navigator, 'languages', {
-        get: () => ['zh-CN', 'zh', 'en-US', 'en'],
-    });
-}
+    // 填充 languages
+    try {
+        if (!navigator.languages || navigator.languages.length === 0) {
+            Object.defineProperty(navigator, 'languages', {
+                get: function() { return ['zh-CN', 'zh', 'en-US', 'en']; },
+                enumerable: true,
+                configurable: true,
+            });
+        }
+    } catch(e) {}
+})();
 """
 
 
