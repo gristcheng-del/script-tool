@@ -1,17 +1,17 @@
 {
     "_comment": "=== 京东自动补货配置 === 两个脚本共用此配置文件",
-
     "browser": {
         "headless": false,
         "slow_mo": 300,
         "user_data_dir": "./browser_data"
     },
-
     "schedule": {
         "check_interval_minutes": 10,
-        "active_hours": [8, 23]
+        "active_hours": [
+            8,
+            23
+        ]
     },
-
     "products": [
         {
             "name": "示例-短袖T恤",
@@ -21,14 +21,22 @@
             "color": "黑色",
             "max_price": 99.0,
             "quantity": 2
+        },
+        {
+            "id": 1,
+            "name": "22",
+            "url": "https://item.jd.com/10222310226780.html?pcdk=flSp71Tdoddl8afbrtQYmZI5TMG6uFEuMEA8BGjvN8gMxv8QJkuAxzGgJug83GDV.rQ4a.tlbT&spmTag=YTAyNDAuYjAwMjQ5My5jMDAwMDQwMjcuNCUyM3NrdV9jYXJkJTQwMTc4MTY3MjM4NDEyMyUyMzE3ODE2NzE5NzcyMzIxNDY4OTE4MDU4JTIzMTI1MDcxNjE3#switch-sku",
+            "enabled": true,
+            "size": "",
+            "color": "",
+            "max_price": 0.0,
+            "quantity": 1
         }
     ],
-
     "checkout": {
         "auto_submit_order": false,
         "payment_password_required": true
     },
-
     "selectors": {
         "stock_available": ".btn-addtocart",
         "stock_unavailable": ".btn-notify, .btn-disable",

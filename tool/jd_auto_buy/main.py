@@ -300,39 +300,52 @@ class JDAutoBuy:
 
     # ---- 库存检测 ----
     def _check_stock(self, page: Page, product: dict) -> bool:
-        """检测商品是否有货"""
+        """检测商品是否有货（多级检测，提高准确率）"""
         selectors = self.selectors
         name = product["name"]
 
-        # 方法1：检查"加入购物车"按钮是否可用
+        # 等待页面 JS 渲染完毕（部分商品页面动态加载库存信息）
+        try:
+            page.wait_for_load_state("networkidle", timeout=3000)
+        except Exception:
+            pass  # 不强求 networkidle，超时也继续
+
+        # 方法1：检查可购买按钮（必须可见 + 可用）
         add_cart_selectors = [
-            selectors.get("add_to_cart_btn", "#InitCartUrl"),
+            selectors.get("add_to_cart_btn", ""),
             "#InitCartUrl",
             ".btn-addtocart",
             "#btn-addcart",
             "a:has-text('加入购物车')",
+            "button:has-text('加入购物车')",
+            ".btn-primary:has-text('加入购物车')",
         ]
         for sel in add_cart_selectors:
+            if not sel:
+                continue
             try:
                 btn = page.locator(sel).first
-                if btn.count() > 0:
-                    text = btn.inner_text(timeout=2000).strip()
-                    classes = btn.get_attribute("class") or ""
-                    # 如果按钮存在且不是灰色/禁用状态，认为有货
-                    if "disable" not in classes.lower() and "无货" not in text:
-                        logger.debug(f"[{name}] 通过选择器 {sel} 判定有货")
-                        return True
+                if btn.count() > 0 and btn.is_visible():
+                    text = (btn.inner_text(timeout=1000) or "").strip()
+                    classes = (btn.get_attribute("class") or "").lower()
+                    # 按钮可见 + 非禁用 + 文本不含"无货" = 有货
+                    if "disable" not in classes and "disabled" not in classes:
+                        if "无货" not in text and "到货通知" not in text:
+                            logger.info(f"[{name}] 判定有货（选择器 {sel}，按钮文本: '{text}'）")
+                            return True
             except Exception:
                 continue
 
-        # 方法2：检查无货标记
+        # 方法2：检查无货标记（显式的售罄/无货）
         out_of_stock_indicators = [
             selectors.get("stock_unavailable", ""),
             ".btn-notify",
             "text=到货通知",
             "text=无货",
             "text=暂时无货",
+            "text=已售罄",
             ".itemover-tips",
+            ".sold-out",
         ]
         for indicator in out_of_stock_indicators:
             if not indicator:
@@ -340,23 +353,68 @@ class JDAutoBuy:
             try:
                 el = page.locator(indicator).first
                 if el.count() > 0 and el.is_visible():
-                    logger.debug(f"[{name}] 检测到无货标记: {indicator}")
+                    logger.info(f"[{name}] 检测到无货标记: {indicator}")
                     return False
             except Exception:
                 continue
 
-        # 方法3：检查库存相关文本
+        # 方法3：全页面文本扫描
         try:
             body_text = page.locator("body").inner_text(timeout=3000)
-            if any(kw in body_text for kw in ["到货通知", "暂时无货", "此商品暂时无货"]):
-                return False
-            if "加入购物车" in body_text:
-                return True
+            # 先检查无货关键词（优先级高于有货——宁可漏过不错买）
+            oos_keywords = ["到货通知", "暂时无货", "此商品暂时无货", "已售罄", "缺货"]
+            for kw in oos_keywords:
+                if kw in body_text:
+                    logger.info(f"[{name}] 页面文本包含 '{kw}' → 无货")
+                    return False
+            # 检查有货关键词
+            buy_keywords = ["加入购物车", "立即购买", "立即抢购"]
+            for kw in buy_keywords:
+                if kw in body_text:
+                    logger.info(f"[{name}] 页面文本包含 '{kw}' → 可能有货（但按钮不可见，尝试继续）")
+                    # 返回 True 让后续流程尝试——如果按钮真的不可用会在 _add_to_cart 时报错
+                    return True
         except Exception:
             pass
 
-        # 无法确定，保守返回 False
-        logger.warning(f"[{name}] 无法确定库存状态，假定无货（避免无效操作）")
+        # 回退：尝试等待更长时间后重新检查（某些页面加载很慢）
+        logger.debug(f"[{name}] 首次检测不确定，等待 2 秒后重试...")
+        try:
+            page.wait_for_timeout(2000)
+            for sel in add_cart_selectors:
+                if not sel:
+                    continue
+                btn = page.locator(sel).first
+                if btn.count() > 0 and btn.is_visible():
+                    text = (btn.inner_text(timeout=500) or "").strip()
+                    if "加入购物车" in text:
+                        logger.info(f"[{name}] 延时重试后判定有货")
+                        return True
+        except Exception:
+            pass
+
+        # 仍然无法确定：输出调试信息帮助诊断
+        logger.warning(
+            f"[{name}] 无法确定库存状态（页面可能改版或加载超时）。"
+            f"请在浏览器中手动查看页面，必要时更新 config.json 中的 selectors。"
+            f"当前页面 URL: {page.url}"
+        )
+        # 打印页面上所有可能的按钮文本作为调试
+        try:
+            all_btns = page.locator("a, button").all()
+            btn_texts = []
+            for b in all_btns[:20]:  # 只看前 20 个
+                try:
+                    t = b.inner_text(timeout=200).strip()
+                    if t:
+                        btn_texts.append(t)
+                except Exception:
+                    pass
+            if btn_texts:
+                logger.info(f"[{name}] 页面按钮文本: {btn_texts}")
+        except Exception:
+            pass
+
         return False
 
     # ---- 价格读取 ----

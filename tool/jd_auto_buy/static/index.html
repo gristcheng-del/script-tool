@@ -565,26 +565,42 @@ function renderStats(s) {
 /* 监控控制 */
 /* ═══════════════════════════════════════════════════════ */
 async function startMonitor() {
-  const dry = $("#restock-dry-run")?.checked || false;
-  const res = await API("/api/monitor/start", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:dry})});
-  if (res.success) { toast(res.message, "success"); refreshStatus(); }
-  else toast(res.message, "error");
+  try {
+    const dry = $("#restock-dry-run")?.checked || false;
+    const res = await API("/api/monitor/start", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:dry})});
+    if (res.success) { toast(res.message, "success"); refreshStatus(); }
+    else toast(res.message, "error");
+  } catch (err) {
+    toast("启动监控失败: " + (err.message || "网络错误"), "error");
+  }
 }
 async function stopTask() {
-  const res = await API("/api/monitor/stop", {method:"POST"});
-  if (res.success) { toast(res.message, "success"); refreshStatus(); }
-  else toast(res.message, "error");
+  try {
+    const res = await API("/api/monitor/stop", {method:"POST"});
+    if (res.success) { toast(res.message, "success"); refreshStatus(); }
+    else toast(res.message, "error");
+  } catch (err) {
+    toast("操作失败: " + (err.message || "网络错误"), "error");
+  }
 }
 async function checkNow() {
-  const res = await API("/api/monitor/check-now", {method:"POST"});
-  if (res.success) toast(res.message, "success");
-  else toast(res.message, "error");
+  try {
+    const res = await API("/api/monitor/check-now", {method:"POST"});
+    if (res.success) toast(res.message, "success");
+    else toast(res.message, "error");
+  } catch (err) {
+    toast("操作失败: " + (err.message || "网络错误"), "error");
+  }
 }
 async function checkOnce() {
-  const dry = $("#restock-dry-run")?.checked || false;
-  const res = await API("/api/monitor/check-once", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:dry})});
-  if (res.success) { toast(res.message, "success"); refreshStatus(); }
-  else toast(res.message, "error");
+  try {
+    const dry = $("#restock-dry-run")?.checked || false;
+    const res = await API("/api/monitor/check-once", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:dry})});
+    if (res.success) { toast(res.message, "success"); refreshStatus(); }
+    else toast(res.message, "error");
+  } catch (err) {
+    toast("操作失败: " + (err.message || "网络错误"), "error");
+  }
 }
 
 /* ═══════════════════════════════════════════════════════ */
@@ -601,17 +617,17 @@ async function loadProducts() {
   }
   tbody.innerHTML = products.map(p => `
     <tr>
-      <td>${p.id}</td>
+      <td>${p.id || "-"}</td>
       <td>${escHtml(p.name)}</td>
       <td class="url" title="${escHtml(p.url)}">${escHtml(p.url)}</td>
       <td>${escHtml(p.size||"-")} / ${escHtml(p.color||"-")}</td>
       <td>${p.max_price ? "¥"+p.max_price : "-"}</td>
       <td>${p.quantity}</td>
-      <td><label class="toggle"><input type="checkbox" ${p.enabled?"checked":""} onchange="toggleProduct(${p.id},this.checked)"><span class="slider"></span></label></td>
-      <td>
+      <td>${p.id ? `<label class="toggle"><input type="checkbox" ${p.enabled?"checked":""} onchange="toggleProduct(${p.id},this.checked)"><span class="slider"></span></label>` : "需刷新"}</td>
+      <td>${p.id ? `
         <button class="btn btn-outline btn-sm" onclick="showEditProduct(${p.id})">编辑</button>
         <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id})">删除</button>
-      </td>
+      ` : '<small style="color:var(--text-dim);">刷新页面自动修复 ID</small>'}</td>
     </tr>
   `).join("");
 }
@@ -673,6 +689,10 @@ async function saveProduct() {
 }
 
 async function deleteProduct(id) {
+  if (!id || isNaN(id)) {
+    toast("无法删除：产品 ID 无效，请刷新页面后再试", "error");
+    return;
+  }
   if (!confirm("确定要删除该产品吗？")) return;
   const res = await API(`/api/products/${id}`, {method:"DELETE"});
   if (res.success) { toast(res.message, "success"); loadProducts(); refreshStatus(); }
@@ -692,14 +712,18 @@ async function loadRestockProducts() {
 }
 
 async function startRestock() {
-  const time = $("#restock-time").value;
-  const advance = parseInt($("#restock-advance").value);
-  const dry = $("#restock-dry-run").checked;
-  const pid = $("#restock-product").value || null;
-  if (!time) { toast("请设置目标时间", "error"); return; }
-  const res = await API("/api/restock/start", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({time,advance,dry_run:dry,product_id:pid?parseInt(pid):null})});
-  if (res.success) { toast(res.message, "success"); refreshStatus(); }
-  else toast(res.message, "error");
+  try {
+    const time = $("#restock-time").value;
+    const advance = parseInt($("#restock-advance").value);
+    const dry = $("#restock-dry-run").checked;
+    const pid = $("#restock-product").value || null;
+    if (!time) { toast("请设置目标时间", "error"); return; }
+    const res = await API("/api/restock/start", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({time,advance,dry_run:dry,product_id:pid?parseInt(pid):null})});
+    if (res.success) { toast(res.message, "success"); refreshStatus(); }
+    else toast(res.message, "error");
+  } catch (err) {
+    toast("启动抢购失败: " + (err.message || "网络错误"), "error");
+  }
 }
 
 /* ═══════════════════════════════════════════════════════ */

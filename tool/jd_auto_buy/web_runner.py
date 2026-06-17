@@ -607,7 +607,22 @@ class MonitorRunner:
                 return False
             config["products"] = new_products
             self._save_unsafe(config)
+            self._sync_product_ids(config)
             return True
+
+    def _repair_product_ids(self):
+        """给没有 id 的产品自动分配 ID（修复旧数据）"""
+        config = self._load_config_unsafe()
+        products = config.get("products", [])
+        repaired = False
+        for p in products:
+            if "id" not in p or p["id"] is None:
+                p["id"] = self._next_product_id
+                self._next_product_id += 1
+                repaired = True
+                logger.info(f"修复产品 ID: {p.get('name', '未知')} → id={p['id']}")
+        if repaired:
+            self._save_unsafe(config)
 
     def _save_unsafe(self, config: dict):
         with open(self.config_path, "w", encoding="utf-8") as f:

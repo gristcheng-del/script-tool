@@ -255,7 +255,9 @@ async def startup():
     log_capture.setup(loop)
     global runner
     runner = MonitorRunner(config_path=_config_path, log_capture=log_capture)
-    # 同步产品 ID
+    # 修复旧数据（无 id 的产品自动补上）
+    runner._repair_product_ids()
+    # 同步产品 ID 计数器
     config = runner.load_config()
     products = config.get("products", [])
     if products:
