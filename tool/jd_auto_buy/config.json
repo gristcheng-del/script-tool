@@ -12,27 +12,7 @@
             23
         ]
     },
-    "products": [
-        {
-            "name": "示例-短袖T恤",
-            "url": "https://item.jd.com/100012345678.html",
-            "enabled": false,
-            "size": "L",
-            "color": "黑色",
-            "max_price": 99.0,
-            "quantity": 2
-        },
-        {
-            "id": 1,
-            "name": "22",
-            "url": "https://item.jd.com/10222310226780.html?pcdk=flSp71Tdoddl8afbrtQYmZI5TMG6uFEuMEA8BGjvN8gMxv8QJkuAxzGgJug83GDV.rQ4a.tlbT&spmTag=YTAyNDAuYjAwMjQ5My5jMDAwMDQwMjcuNCUyM3NrdV9jYXJkJTQwMTc4MTY3MjM4NDEyMyUyMzE3ODE2NzE5NzcyMzIxNDY4OTE4MDU4JTIzMTI1MDcxNjE3#switch-sku",
-            "enabled": true,
-            "size": "",
-            "color": "",
-            "max_price": 0.0,
-            "quantity": 1
-        }
-    ],
+    "products": [],
     "checkout": {
         "auto_submit_order": false,
         "payment_password_required": true

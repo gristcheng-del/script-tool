@@ -651,9 +651,15 @@ function showAddProduct() {
 }
 
 async function showEditProduct(id) {
+  if (id === undefined || id === null || isNaN(id)) {
+    toast("无法编辑：产品 ID 无效，请刷新页面", "error");
+    return;
+  }
   const res = await API("/api/products");
-  const p = res.data.products.find(x => x.id === id);
-  if (!p) return;
+  // 使用 == 宽松比较，兼容后端返回的 int id 和前端传递的 number
+  const pid = parseInt(id);
+  const p = res.data.products.find(x => x.id === pid || x.id == pid);
+  if (!p) { toast("产品不存在", "error"); return; }
   $("#product-modal-title").textContent = "编辑产品";
   $("#prod-edit-id").value = p.id;
   $("#prod-name").value = p.name;
@@ -713,8 +719,13 @@ async function loadRestockProducts() {
 
 async function startRestock() {
   try {
-    const time = $("#restock-time").value;
-    const advance = parseInt($("#restock-advance").value);
+    let time = $("#restock-time").value;
+    // 如果时间输入框为空，补默认值
+    if (!time || time.trim() === "") {
+      time = "08:00:00";
+      $("#restock-time").value = time;
+    }
+    const advance = parseInt($("#restock-advance").value) || 30;
     const dry = $("#restock-dry-run").checked;
     const pid = $("#restock-product").value || null;
     if (!time) { toast("请设置目标时间", "error"); return; }

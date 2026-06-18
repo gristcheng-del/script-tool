@@ -63,7 +63,7 @@ class MonitorStartRequest(BaseModel):
     dry_run: bool = False
 
 class RestockStartRequest(BaseModel):
-    time: str = Field(..., min_length=4)
+    time: str = Field(default="", min_length=0)  # 允许空字符串，路由中再校验
     advance: int = Field(default=30, ge=15)
     dry_run: bool = False
     product_id: int = None
@@ -168,9 +168,11 @@ async def check_once(req: MonitorStartRequest):
 # ── 抢购控制 ──
 @app.post("/api/restock/start")
 async def start_restock(req: RestockStartRequest):
+    if not req.time or len(req.time.strip()) < 4:
+        return _err("请填写有效的目标时间（格式 HH:MM 或 HH:MM:SS）")
     try:
         ok = runner.start_restock(
-            target_time=req.time,
+            target_time=req.time.strip(),
             advance=req.advance,
             dry_run=req.dry_run,
             product_id=req.product_id,

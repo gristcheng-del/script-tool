@@ -561,8 +561,9 @@ class MonitorRunner:
 
     # ── 产品 CRUD ──
     def get_products(self) -> list:
-        config = self.load_config()
-        return config.get("products", [])
+        # 每次获取产品时先检查修复 ID（防止旧数据无 ID 导致前端异常）
+        self._repair_product_ids()
+        return self.load_config().get("products", [])
 
     def add_product(self, data: dict) -> int:
         with self._lock:
@@ -600,27 +601,77 @@ class MonitorRunner:
 
     def delete_product(self, product_id: int) -> bool:
         with self._lock:
+            # 先修复 ID（防止旧数据无 ID 导致误删全部）
+            self._repair_product_ids_nolock()
             config = self._load_config_unsafe()
             products = config.get("products", [])
-            new_products = [p for p in products if p.get("id") != product_id]
-            if len(new_products) == len(products):
+            # 找到要删除的产品（精确匹配，不依赖过滤）
+            target = None
+            for i, p in enumerate(products):
+                if p.get("id") == product_id:
+                    target = i
+                    break
+            if target is None:
                 return False
-            config["products"] = new_products
+            deleted_name = products[target].get("name", "未知")
+            products.pop(target)
+            config["products"] = products
             self._save_unsafe(config)
             self._sync_product_ids(config)
+            logger.info(f"已删除产品: {deleted_name} (id={product_id})")
             return True
 
-    def _repair_product_ids(self):
-        """给没有 id 的产品自动分配 ID（修复旧数据）"""
+    def _repair_product_ids_nolock(self):
+        """_repair_product_ids 的无锁版本（调用者需持有锁）"""
+        # 直接内联避免死锁
         config = self._load_config_unsafe()
         products = config.get("products", [])
+        if not products:
+            return
         repaired = False
+        seen_ids = set()
         for p in products:
-            if "id" not in p or p["id"] is None:
+            pid = p.get("id")
+            if "id" not in p or pid is None:
+                p["id"] = self._next_product_id
+                self._next_product_id += 1
+                repaired = True
+            elif pid in seen_ids:
+                p["id"] = self._next_product_id
+                self._next_product_id += 1
+                repaired = True
+            else:
+                seen_ids.add(pid)
+        if repaired:
+            self._save_unsafe(config)
+
+    def _repair_product_ids(self):
+        """给没有 id 或 id 重复的产品分配唯一 ID"""
+        config = self._load_config_unsafe()
+        products = config.get("products", [])
+        if not products:
+            return
+        repaired = False
+        seen_ids = set()
+        for p in products:
+            pid = p.get("id")
+            # 情况1：无 id
+            if "id" not in p or pid is None:
                 p["id"] = self._next_product_id
                 self._next_product_id += 1
                 repaired = True
                 logger.info(f"修复产品 ID: {p.get('name', '未知')} → id={p['id']}")
+            # 情况2：id 重复
+            elif pid in seen_ids:
+                old_id = pid
+                p["id"] = self._next_product_id
+                self._next_product_id += 1
+                repaired = True
+                logger.warning(
+                    f"修复重复 ID: {p.get('name', '未知')} id={old_id} → 新 id={p['id']}"
+                )
+            else:
+                seen_ids.add(pid)
         if repaired:
             self._save_unsafe(config)
 
