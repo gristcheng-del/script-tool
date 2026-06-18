@@ -246,6 +246,45 @@ async def serve_index():
 
 
 # ═══════════════════════════════════════════════════════════
+# 登录管理
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/login")
+async def do_login():
+    """打开浏览器让用户扫码登录京东"""
+    try:
+        ok = runner.start_login()
+        if not ok:
+            return _err("已有任务在运行，请先停止", status=409)
+        return _ok(message="浏览器已打开，请扫码登录京东")
+    except Exception as e:
+        return _err(str(e))
+
+
+@app.get("/api/login/status")
+async def login_status():
+    """检查京东登录状态（快速检测，不打开可见浏览器）"""
+    try:
+        is_logged = runner.check_login_status()
+        user_data = str(runner._user_data_dir) if hasattr(runner, '_user_data_dir') else ""
+        return _ok(data={
+            "logged_in": is_logged,
+            "user_data_dir": user_data,
+        })
+    except Exception as e:
+        return _ok(data={"logged_in": False, "error": str(e)})
+
+
+@app.delete("/api/login")
+async def clear_login():
+    """清除浏览器缓存（退出登录）"""
+    if runner._mode != "idle":
+        return _err("请先停止正在运行的任务", status=409)
+    runner.clear_browser_data()
+    return _ok(message="浏览器缓存已清除，下次启动需重新登录")
+
+
+# ═══════════════════════════════════════════════════════════
 # 启动 / 关闭
 # ═══════════════════════════════════════════════════════════
 

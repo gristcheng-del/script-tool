@@ -12,7 +12,18 @@
             23
         ]
     },
-    "products": [],
+    "products": [
+        {
+            "id": 2,
+            "name": "Test-2-EDITED",
+            "url": "https://item.jd.com/222222.html",
+            "enabled": true,
+            "size": "XL",
+            "color": "white",
+            "max_price": 199.0,
+            "quantity": 1
+        }
+    ],
     "checkout": {
         "auto_submit_order": false,
         "payment_password_required": true

@@ -501,6 +501,12 @@ class MonitorRunner:
         self._start_time: Optional[datetime] = None
         self._error_message: Optional[str] = None
         self._next_product_id: int = 1
+        # 解析 user_data_dir（和 JDAutoBuy 保持一致）
+        config = self._load_config_unsafe()
+        self._user_data_dir = Path(
+            config.get("browser", {}).get("user_data_dir", "./browser_data")
+        ).resolve()
+        self._user_data_dir.mkdir(parents=True, exist_ok=True)
 
     # ── 状态 ──
     @property
@@ -870,3 +876,114 @@ class MonitorRunner:
                         config[section] = {}
                     config[section].update(values)
             self._save_unsafe(config)
+
+    # ── 登录管理 ──
+    def start_login(self) -> bool:
+        """打开浏览器到京东登录页，让用户手动扫码"""
+        with self._lock:
+            if self._mode != "idle":
+                return False
+            self._mode = "login"
+
+        def _login_thread():
+            try:
+                from stealth_utils import get_browser_channel, get_common_viewport, get_browser_args, PAGE_INIT_SCRIPT
+                from playwright.sync_api import sync_playwright
+
+                channel, _ = get_browser_channel()
+                p = sync_playwright().start()
+                viewport = get_common_viewport()
+                kwargs = {
+                    "user_data_dir": str(self._user_data_dir),
+                    "headless": False,
+                    "slow_mo": 100,
+                    "viewport": viewport,
+                    "locale": "zh-CN",
+                    "args": get_browser_args(),
+                }
+                if channel:
+                    kwargs["channel"] = channel
+                context = p.chromium.launch_persistent_context(**kwargs)
+                context.add_init_script(PAGE_INIT_SCRIPT)
+
+                page = context.new_page()
+                page.goto("https://www.jd.com/", wait_until="domcontentloaded")
+
+                logger.info("登录窗口已打开，请在浏览器中扫码登录京东")
+                logger.info("登录完成后可关闭浏览器窗口，或等待 120 秒自动关闭")
+
+                # 等待登录成功
+                import time as _time
+                deadline = _time.time() + 120
+                while _time.time() < deadline:
+                    try:
+                        logged_in_el = page.locator('.nickname, .user-name, .J_user').first
+                        if logged_in_el.count() > 0:
+                            text = logged_in_el.inner_text(timeout=2000)
+                            if text and "登录" not in text:
+                                logger.info(f"登录成功！用户: {text.strip()}")
+                                logger.info("登录状态已保存，可以关闭浏览器窗口")
+                                _time.sleep(5)
+                                break
+                    except Exception:
+                        pass
+                    _time.sleep(1)
+                else:
+                    logger.warning("登录超时（120秒），请重试")
+
+                context.close()
+                p.stop()
+            except Exception as e:
+                logger.error(f"登录窗口异常: {e}")
+            finally:
+                with self._lock:
+                    self._mode = "idle"
+                self.log_capture.broadcast_status(self.status)
+
+        t = threading.Thread(target=_login_thread, daemon=True, name="login-thread")
+        t.start()
+        return True
+
+    def check_login_status(self) -> bool:
+        """快速检查京东登录状态（headless 模式）"""
+        try:
+            from playwright.sync_api import sync_playwright
+            p = sync_playwright().start()
+            try:
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir=str(self._user_data_dir),
+                    headless=True,
+                    args=["--no-sandbox"],
+                )
+                page = context.new_page()
+                page.goto("https://www.jd.com/", wait_until="domcontentloaded", timeout=10000)
+                page.wait_for_timeout(1000)
+
+                logged_in = False
+                try:
+                    el = page.locator('.nickname, .user-name, .J_user').first
+                    if el.count() > 0:
+                        text = el.inner_text(timeout=3000)
+                        if text and "登录" not in text:
+                            logged_in = True
+                except Exception:
+                    pass
+
+                context.close()
+                return logged_in
+            finally:
+                p.stop()
+        except Exception as e:
+            logger.debug(f"登录状态检查失败: {e}")
+            return False
+
+    def clear_browser_data(self):
+        """清除浏览器缓存目录"""
+        import shutil
+        if self._user_data_dir.exists():
+            try:
+                shutil.rmtree(str(self._user_data_dir))
+                self._user_data_dir.mkdir(parents=True, exist_ok=True)
+                logger.info(f"浏览器缓存已清除: {self._user_data_dir}")
+            except Exception as e:
+                logger.error(f"清除缓存失败: {e}")

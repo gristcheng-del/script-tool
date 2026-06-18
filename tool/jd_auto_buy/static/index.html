@@ -238,6 +238,21 @@ label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--text-d
       <div id="panel-dashboard" class="tab-panel active">
         <div class="stat-grid" id="stat-grid"></div>
         <div class="card">
+          <div class="card-header">
+            <span style="display:flex;align-items:center;gap:8px;">
+              登录状态
+              <span id="login-status-dot" style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#888;"></span>
+              <span id="login-status-text" style="font-weight:400;font-size:13px;">检测中...</span>
+            </span>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-outline btn-sm" id="btn-login" onclick="doLogin()">🔑 扫码登录</button>
+            <button class="btn btn-outline btn-sm" id="btn-check-login" onclick="checkLoginStatus()">🔄 检查状态</button>
+            <button class="btn btn-danger btn-sm" id="btn-clear-login" onclick="clearLogin()">🗑 清除登录</button>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-dim);" id="login-data-dir"></div>
+        </div>
+        <div class="card">
           <div class="card-header">快速操作</div>
           <div class="btn-group">
             <button class="btn btn-success" id="btn-start-monitor" onclick="startMonitor()">▶ 启动监控</button>
@@ -562,6 +577,59 @@ function renderStats(s) {
 }
 
 /* ═══════════════════════════════════════════════════════ */
+/* 登录管理 */
+/* ═══════════════════════════════════════════════════════ */
+async function checkLoginStatus() {
+  try {
+    const res = await API("/api/login/status");
+    if (res.success && res.data) {
+      const loggedIn = res.data.logged_in;
+      $("#login-status-dot").style.background = loggedIn ? "var(--success)" : "#888";
+      $("#login-status-text").textContent = loggedIn ? "已登录" : "未登录";
+      if (res.data.user_data_dir) {
+        $("#login-data-dir").textContent = "缓存目录: " + res.data.user_data_dir;
+      }
+    }
+  } catch (e) {
+    $("#login-status-text").textContent = "检测失败";
+  }
+}
+
+async function doLogin() {
+  try {
+    const res = await API("/api/login", { method: "POST" });
+    if (res.success) {
+      toast(res.message, "success");
+      // 120秒后自动检查登录状态
+      setTimeout(checkLoginStatus, 3000);
+      setTimeout(checkLoginStatus, 10000);
+      setTimeout(checkLoginStatus, 30000);
+      setTimeout(checkLoginStatus, 60000);
+      setTimeout(checkLoginStatus, 120000);
+    } else {
+      toast(res.message, "error");
+    }
+  } catch (e) {
+    toast("操作失败: " + (e.message || "网络错误"), "error");
+  }
+}
+
+async function clearLogin() {
+  if (!confirm("确定要清除登录缓存吗？下次需要重新扫码登录。")) return;
+  try {
+    const res = await API("/api/login", { method: "DELETE" });
+    if (res.success) {
+      toast(res.message, "success");
+      checkLoginStatus();
+    } else {
+      toast(res.message, "error");
+    }
+  } catch (e) {
+    toast("操作失败: " + (e.message || "网络错误"), "error");
+  }
+}
+
+/* ═══════════════════════════════════════════════════════ */
 /* 监控控制 */
 /* ═══════════════════════════════════════════════════════ */
 async function startMonitor() {
@@ -819,9 +887,11 @@ function clearLogs() {
 document.addEventListener("DOMContentLoaded", async () => {
   connectSSE();
   await refreshStatus();
+  await checkLoginStatus();
   renderStats(state.status);
-  // 每 5 秒刷新状态
+  // 每 5 秒刷新状态，每 30 秒刷新登录状态
   setInterval(refreshStatus, 5000);
+  setInterval(checkLoginStatus, 30000);
 });
 </script>
 </body>
